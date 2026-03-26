@@ -326,7 +326,7 @@ local function createMenu()
     titleText.Size = UDim2.new(1, -60, 1, 0)
     titleText.Position = UDim2.new(0, 15, 0, 0)
     titleText.BackgroundTransparency = 1
-    titleText.Text = "🍒 Melony Cheats"
+    titleText.Text = "Melony Cheats"
     titleText.TextColor3 = Color3.fromRGB(255, 120, 160)
     titleText.TextSize = 20
     titleText.TextXAlignment = Enum.TextXAlignment.Left
@@ -338,7 +338,7 @@ local function createMenu()
     closeBtn.Size = UDim2.new(0, 32, 0, 32)
     closeBtn.Position = UDim2.new(1, -40, 0, 6)
     closeBtn.BackgroundColor3 = Color3.fromRGB(220, 60, 60)
-    closeBtn.Text = "✕"
+    closeBtn.Text = "X"
     closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     closeBtn.TextSize = 18
     closeBtn.Font = Enum.Font.GothamBold
