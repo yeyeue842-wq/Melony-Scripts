@@ -1,6 +1,5 @@
--- Melony Scripts | TSB (The Strongest Battlegrounds)
+-- Melony Scripts | TSB (Real Invisible)
 -- Creator: Melony
--- Features: Invisible, Speed, Super Jump, Fly, ESP
 
 local p, plr = game:GetService("Players"), game:GetService("Players").LocalPlayer
 local runService = game:GetService("RunService")
@@ -9,7 +8,8 @@ local camera = workspace.CurrentCamera
 
 local gui = nil
 local espObjects = {}
-local originalTransparency = {}
+local invisibleActive = false
+local originalPosition = nil
 
 -- Настройки
 local settings = {
@@ -22,34 +22,80 @@ local settings = {
     jumpPower = 80
 }
 
--- НЕВИДИМОСТЬ (делает персонажа прозрачным для других)
-local function setInvisible(enabled)
+-- РЕАЛЬНАЯ НЕВИДИМОСТЬ (телепортируемся под карту)
+local function setRealInvisible(enabled)
     local char = plr.Character
     if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
     
     if enabled then
-        -- Делаем все части тела прозрачными
+        -- Сохраняем позицию
+        originalPosition = hrp.Position
+        -- Телепортируемся глубоко под карту
+        hrp.CFrame = CFrame.new(0, -500, 0)
+        -- Отключаем столкновения
+        hrp.CanCollide = false
+        -- Делаем персонажа полупрозрачным (на всякий случай)
         for _, part in ipairs(char:GetDescendants()) do
-            if part:IsA("BasePart") or part:IsA("MeshPart") then
-                originalTransparency[part] = part.Transparency
+            if part:IsA("BasePart") then
+                part.Transparency = 0.8
+            end
+        end
+    else
+        -- Возвращаемся обратно
+        if originalPosition then
+            hrp.CFrame = CFrame.new(originalPosition)
+        end
+        hrp.CanCollide = true
+        -- Восстанавливаем прозрачность
+        for _, part in ipairs(char:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.Transparency = 0
+            end
+        end
+    end
+end
+
+-- АЛЬТЕРНАТИВНЫЙ СПОСОБ (уменьшение размера и телепортация в небо)
+local function setTinyInvisible(enabled)
+    local char = plr.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    
+    if enabled then
+        originalPosition = hrp.Position
+        -- Уменьшаем размер до 0
+        for _, part in ipairs(char:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.Size = Vector3.new(0.1, 0.1, 0.1)
                 part.Transparency = 1
             end
         end
-        -- Убираем тени
-        if char:FindFirstChild("Humanoid") then
-            char.Humanoid.BlockOffset = Vector3.new(0, 0, 0)
-        end
+        -- Телепортируем в небо
+        hrp.CFrame = CFrame.new(0, 1000, 0)
+        hrp.CanCollide = false
     else
-        -- Возвращаем прозрачность обратно
-        for part, transparency in pairs(originalTransparency) do
-            if part and part.Parent then
-                part.Transparency = transparency
-            end
+        -- Восстанавливаем
+        if originalPosition then
+            hrp.CFrame = CFrame.new(originalPosition)
         end
-        originalTransparency = {}
-        if char:FindFirstChild("Humanoid") then
-            char.Humanoid.BlockOffset = nil
-        end
+        hrp.CanCollide = true
+        -- Восстанавливаем размер (нужно пересоздать персонажа)
+        plr.Character:BreakJoints()
+        task.wait(0.5)
+    end
+end
+
+-- Используем первый вариант (телепортация под карту)
+local function setInvisible(enabled)
+    if enabled then
+        setRealInvisible(true)
+        invisibleActive = true
+    else
+        setRealInvisible(false)
+        invisibleActive = false
     end
 end
 
@@ -85,7 +131,6 @@ local function startFly()
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
     
-    -- Отключаем гравитацию
     local humanoid = char:FindFirstChild("Humanoid")
     if humanoid then
         humanoid.PlatformStand = true
@@ -137,7 +182,7 @@ local function stopFly()
     end
 end
 
--- ESP (подсветка игроков)
+-- ESP для других игроков
 local function createESP(player)
     if not player.Character or player == plr or not settings.esp then return end
     if espObjects[player] then return end
@@ -187,11 +232,11 @@ end
 
 -- Обработка смены персонажа
 plr.CharacterAdded:Connect(function(char)
-    task.wait(0.5)
-    setInvisible(settings.invisible)
+    task.wait(1)
     setSpeed(settings.speed)
     setSuperJump(settings.superJump)
     if settings.fly then startFly() else stopFly() end
+    if settings.invisible then setInvisible(true) end
     
     if settings.esp then
         for _, player in ipairs(p:GetPlayers()) do
@@ -254,7 +299,7 @@ local function createMenu()
     titleText.Size = UDim2.new(1, -60, 1, 0)
     titleText.Position = UDim2.new(0, 15, 0, 0)
     titleText.BackgroundTransparency = 1
-    titleText.Text = "⚡ Melony | TSB"
+    titleText.Text = "👻 Melony | TSB"
     titleText.TextColor3 = Color3.fromRGB(255, 150, 100)
     titleText.TextSize = 18
     titleText.TextXAlignment = Enum.TextXAlignment.Left
@@ -305,7 +350,7 @@ local function createMenu()
         end)
     end
     
-    createButton("👻 Invisible", "invisible", yPos)
+    createButton("👻 Invisible (Real)", "invisible", yPos)
     createButton("⚡ Speed", "speed", yPos + 48)
     createButton("🦘 Super Jump", "superJump", yPos + 96)
     createButton("✈️ Fly", "fly", yPos + 144)
@@ -378,7 +423,7 @@ local function createMenu()
     end)
 end
 
--- Горячая клавиша (Right Shift)
+-- Горячая клавиша
 userInput.InputBegan:Connect(function(input)
     if input.KeyCode == Enum.KeyCode.RightShift then
         if gui then
@@ -392,10 +437,10 @@ end)
 
 -- Запуск
 createMenu()
-setInvisible(settings.invisible)
 setSpeed(settings.speed)
 setSuperJump(settings.superJump)
 
-print("✅ Melony Scripts | The Strongest Battlegrounds")
-print("👻 Invisible | ⚡ Speed | 🦘 Super Jump | ✈️ Fly")
+print("✅ Melony Scripts | TSB Real Invisible")
+print("👻 Invisible teleports you UNDER the map - others won't see you!")
+print("⚡ Speed | 🦘 Super Jump | ✈️ Fly")
 print("⌨️ Press Right Shift to open menu")
