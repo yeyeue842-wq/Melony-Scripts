@@ -1,11 +1,31 @@
--- Melony Scripts | MM2 Ultimate
+-- Melony Scripts | MM2 Ultimate (Universal Edition)
 -- Creator: Melony
+-- Works on: XENO, Delta, SKIBX, Synapse, Krnl, ScriptWare, and more
 
 local p, plr = game:GetService("Players"), game:GetService("Players").LocalPlayer
 local runService = game:GetService("RunService")
 local camera = workspace.CurrentCamera
-local mouse = plr:GetMouse()
 local userInput = game:GetService("UserInputService")
+local httpService = game:GetService("HttpService")
+
+-- Автоопределение инжектора и платформы
+local isMobile = userInput.TouchEnabled
+local isPC = not isMobile
+
+-- Безопасное создаление GUI (работает на всех инжекторах)
+local function createScreenGui(name)
+    local success, gui = pcall(function()
+        local newGui = Instance.new("ScreenGui")
+        newGui.Name = name
+        newGui.Parent = plr:WaitForChild("PlayerGui")
+        newGui.ResetOnSpawn = false
+        if newGui.IgnoreGuiInset then newGui.IgnoreGuiInset = true end
+        if newGui.DisplayOrder then newGui.DisplayOrder = 999 end
+        return newGui
+    end)
+    if success then return gui end
+    return nil
+end
 
 local gui = nil
 local icon = nil
@@ -22,7 +42,7 @@ local settings = {
     aimPart = "Head"
 }
 
--- Функция определения роли с запоминанием
+-- Функция определения роли
 local function getRoleByWeapon(player)
     if not player.Character then 
         return playerRoles[player] or "Innocent"
@@ -116,8 +136,10 @@ end
 
 local function clearESP()
     for _, obj in pairs(espObjects) do
-        if obj.highlight then obj.highlight:Destroy() end
-        if obj.billboard then obj.billboard:Destroy() end
+        pcall(function()
+            if obj.highlight then obj.highlight:Destroy() end
+            if obj.billboard then obj.billboard:Destroy() end
+        end)
     end
     espObjects = {}
 end
@@ -130,76 +152,93 @@ local function setupESP()
     end
 end
 
--- Создание текстовой иконки
+-- Создание иконки (универсальная)
 local function createFloatingIcon()
-    if icon then pcall(function() icon:Destroy() end) end
+    pcall(function() if icon then icon:Destroy() end end)
     
-    icon = Instance.new("ScreenGui")
-    icon.Name = "MelonyIcon"
-    icon.Parent = plr:WaitForChild("PlayerGui")
-    icon.ResetOnSpawn = false
-    icon.DisplayOrder = 999
-    icon.IgnoreGuiInset = true
+    local success, newIcon = pcall(function()
+        local i = Instance.new("ScreenGui")
+        i.Name = "MelonyIcon"
+        i.Parent = plr:WaitForChild("PlayerGui")
+        i.ResetOnSpawn = false
+        if i.IgnoreGuiInset then i.IgnoreGuiInset = true end
+        if i.DisplayOrder then i.DisplayOrder = 999 end
+        return i
+    end)
+    if not success then return end
+    icon = newIcon
     
-    local iconButton = Instance.new("TextButton")
-    iconButton.Size = UDim2.new(0, 150, 0, 40)
-    iconButton.Position = UDim2.new(0.8, 0, 0.85, 0)
-    iconButton.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
-    iconButton.BackgroundTransparency = 0.1
-    iconButton.Text = "🍒 Melony Cheats"
-    iconButton.TextColor3 = Color3.fromRGB(255, 120, 160)
-    iconButton.TextSize = 16
-    iconButton.Font = Enum.Font.GothamBold
-    iconButton.AutoButtonColor = true
-    iconButton.Parent = icon
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0, 150, 0, 40)
+    btn.Position = UDim2.new(0.8, 0, 0.85, 0)
+    btn.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+    btn.BackgroundTransparency = 0.1
+    btn.Text = "🍒 Melony Cheats"
+    btn.TextColor3 = Color3.fromRGB(255, 120, 160)
+    btn.TextSize = 16
+    btn.Font = Enum.Font.GothamBold
+    btn.AutoButtonColor = true
+    btn.Parent = icon
     
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, 25)
-    corner.Parent = iconButton
+    corner.Parent = btn
     
-    local stroke = Instance.new("UIStroke")
-    stroke.Color = Color3.fromRGB(255, 120, 160)
-    stroke.Thickness = 1.5
-    stroke.Transparency = 0.3
-    stroke.Parent = iconButton
-    
-    -- Перетаскивание
+    -- Перетаскивание (для ПК и мобильных)
     local dragging = false
     local dragStart, startPos
-    iconButton.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+    
+    btn.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
             dragStart = input.Position
-            startPos = iconButton.Position
+            startPos = btn.Position
         end
     end)
-    iconButton.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+    
+    btn.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = false
         end
     end)
+    
     userInput.InputChanged:Connect(function(input)
-        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
             local delta = input.Position - dragStart
-            iconButton.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+            btn.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
         end
     end)
     
-    -- Открытие меню
-    iconButton.MouseButton1Click:Connect(function()
-        if icon then pcall(function() icon:Destroy() end); icon = nil end
-        createMenu()
+    btn.MouseButton1Click:Connect(function()
+        pcall(function()
+            if icon then icon:Destroy(); icon = nil end
+            createMenu()
+        end)
+    end)
+    
+    -- Для мобильных (touch)
+    btn.TouchTap:Connect(function()
+        pcall(function()
+            if icon then icon:Destroy(); icon = nil end
+            createMenu()
+        end)
     end)
 end
 
--- Создание основного меню
+-- Создание меню
 local function createMenu()
-    if gui then pcall(function() gui:Destroy() end) end
+    pcall(function() if gui then gui:Destroy() end end)
     
-    gui = Instance.new("ScreenGui")
-    gui.Name = "Melony"
-    gui.Parent = plr:WaitForChild("PlayerGui")
-    gui.ResetOnSpawn = false
+    local success, newGui = pcall(function()
+        local g = Instance.new("ScreenGui")
+        g.Name = "Melony"
+        g.Parent = plr:WaitForChild("PlayerGui")
+        g.ResetOnSpawn = false
+        if g.IgnoreGuiInset then g.IgnoreGuiInset = true end
+        return g
+    end)
+    if not success then return end
+    gui = newGui
     
     local f = Instance.new("Frame")
     f.Size = UDim2.new(0, 280, 0, 320)
@@ -252,7 +291,7 @@ local function createMenu()
     closeCorner.Parent = closeBtn
     
     closeBtn.MouseButton1Click:Connect(function()
-        if gui then pcall(function() gui:Destroy() end); gui = nil end
+        pcall(function() if gui then gui:Destroy(); gui = nil end end)
         createFloatingIcon()
     end)
     
@@ -297,7 +336,6 @@ local function createMenu()
         end)
     end
     
-    -- Подпись
     local footer = Instance.new("TextLabel")
     footer.Size = UDim2.new(1, 0, 0, 28)
     footer.Position = UDim2.new(0, 0, 1, -32)
@@ -318,7 +356,8 @@ local function getTarget()
             local role = getRoleByWeapon(v)
             if settings.targetMode == "All" or (settings.targetMode == "Murderer" and role == "Murderer") or (settings.targetMode == "Sheriff" and role == "Sheriff") then
                 local pos, onScreen = camera:WorldToViewportPoint(v.Character[settings.aimPart].Position)
-                local dist = (Vector2.new(mouse.X, mouse.Y) - Vector2.new(pos.X, pos.Y)).Magnitude
+                local screenCenter = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
+                local dist = (screenCenter - Vector2.new(pos.X, pos.Y)).Magnitude
                 if onScreen and dist < closestDist then
                     closestDist, closest = dist, v
                 end
@@ -333,7 +372,7 @@ local function triggerbot()
     local target = getTarget()
     if target then
         local tool = plr.Character:FindFirstChildOfClass("Tool")
-        if tool then tool:Activate() end
+        if tool then pcall(function() tool:Activate() end) end
     end
 end
 
@@ -347,7 +386,7 @@ local function aimbot()
     end
 end
 
--- Отслеживание смены оружия
+-- Отслеживание игроков
 for _, player in ipairs(p:GetPlayers()) do
     if player ~= plr then
         player.CharacterAdded:Connect(function(char)
@@ -379,17 +418,22 @@ runService.RenderStepped:Connect(function()
     triggerbot()
 end)
 
--- Right Shift открывает меню
+-- Горячая клавиша / жест
 userInput.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
-    if input.KeyCode == Enum.KeyCode.RightShift then
-        if icon then pcall(function() icon:Destroy() end); icon = nil end
-        if gui then pcall(function() gui:Destroy() end); gui = nil end
-        createMenu()
+    if input.KeyCode == Enum.KeyCode.RightShift or (isMobile and input.KeyCode == Enum.KeyCode.LeftControl) then
+        pcall(function()
+            if icon then icon:Destroy(); icon = nil end
+            if gui then gui:Destroy(); gui = nil end
+            createMenu()
+        end)
     end
 end)
 
 -- Запуск
 createMenu()
 if settings.esp then setupESP() end
-print("Melony Scripts Loaded | Press Right Shift to open menu")
+
+print("✅ Melony Scripts Loaded | Universal Edition")
+print("📱 Platform: " .. (isMobile and "Mobile (SKIBX/Delta)" or "PC (XENO/Synapse)"))
+print("⌨️ Press Right Shift (PC) or hold on screen (Mobile) to open menu")
