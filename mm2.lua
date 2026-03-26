@@ -1,6 +1,5 @@
 -- Melony Scripts | MM2 Ultimate
 -- Creator: Melony
--- Features: ESP + Role Memory + AimBot + TriggerBot + Text Icon
 
 local p, plr = game:GetService("Players"), game:GetService("Players").LocalPlayer
 local runService = game:GetService("RunService")
@@ -131,42 +130,40 @@ local function setupESP()
     end
 end
 
--- Создание текстовой иконки "Melony Cheats"
+-- Создание текстовой иконки
 local function createFloatingIcon()
-    if icon then icon:Destroy() end
-    icon = Instance.new("ScreenGui", plr:WaitForChild("PlayerGui"))
+    if icon then pcall(function() icon:Destroy() end) end
+    
+    icon = Instance.new("ScreenGui")
     icon.Name = "MelonyIcon"
+    icon.Parent = plr:WaitForChild("PlayerGui")
+    icon.ResetOnSpawn = false
     icon.DisplayOrder = 999
     icon.IgnoreGuiInset = true
     
-    local iconButton = Instance.new("TextButton", icon)
-    iconButton.Size = UDim2.new(0, 140, 0, 38)
+    local iconButton = Instance.new("TextButton")
+    iconButton.Size = UDim2.new(0, 150, 0, 40)
     iconButton.Position = UDim2.new(0.8, 0, 0.85, 0)
-    iconButton.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
-    iconButton.BackgroundTransparency = 0.15
+    iconButton.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+    iconButton.BackgroundTransparency = 0.1
     iconButton.Text = "🍒 Melony Cheats"
-    iconButton.TextColor3 = Color3.fromRGB(255, 100, 150)
+    iconButton.TextColor3 = Color3.fromRGB(255, 120, 160)
     iconButton.TextSize = 16
     iconButton.Font = Enum.Font.GothamBold
     iconButton.AutoButtonColor = true
-    Instance.new("UICorner", iconButton).CornerRadius = UDim.new(0, 20)
+    iconButton.Parent = icon
     
-    -- Обводка
-    local stroke = Instance.new("UIStroke", iconButton)
-    stroke.Color = Color3.fromRGB(255, 100, 150)
-    stroke.Thickness = 1
-    stroke.Transparency = 0.5
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 25)
+    corner.Parent = iconButton
     
-    -- Анимация свечения
-    local glow = Instance.new("Frame", iconButton)
-    glow.Size = UDim2.new(1.1, 0, 1.1, 0)
-    glow.Position = UDim2.new(-0.05, 0, -0.05, 0)
-    glow.BackgroundColor3 = Color3.fromRGB(255, 100, 150)
-    glow.BackgroundTransparency = 0.8
-    glow.BorderSizePixel = 0
-    Instance.new("UICorner", glow).CornerRadius = UDim.new(0, 20)
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(255, 120, 160)
+    stroke.Thickness = 1.5
+    stroke.Transparency = 0.3
+    stroke.Parent = iconButton
     
-    -- Перетаскивание иконки
+    -- Перетаскивание
     local dragging = false
     local dragStart, startPos
     iconButton.InputBegan:Connect(function(input)
@@ -188,58 +185,75 @@ local function createFloatingIcon()
         end
     end)
     
-    -- Открытие меню по клику
+    -- Открытие меню
     iconButton.MouseButton1Click:Connect(function()
+        if icon then pcall(function() icon:Destroy() end); icon = nil end
         createMenu()
-        if icon then icon:Destroy(); icon = nil end
     end)
 end
 
--- Создание основного меню (перетаскиваемое)
+-- Создание основного меню
 local function createMenu()
-    if gui then gui:Destroy() end
-    gui = Instance.new("ScreenGui", plr:WaitForChild("PlayerGui"))
-    gui.Name = "Melony"
+    if gui then pcall(function() gui:Destroy() end) end
     
-    local f = Instance.new("Frame", gui)
+    gui = Instance.new("ScreenGui")
+    gui.Name = "Melony"
+    gui.Parent = plr:WaitForChild("PlayerGui")
+    gui.ResetOnSpawn = false
+    
+    local f = Instance.new("Frame")
     f.Size = UDim2.new(0, 280, 0, 320)
     f.Position = UDim2.new(0.5, -140, 0.5, -160)
     f.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+    f.BackgroundTransparency = 0.05
     f.Active = true
-    f.Draggable = true  -- меню можно перетаскивать за заголовок
-    Instance.new("UICorner", f).CornerRadius = UDim.new(0, 12)
+    f.Draggable = true
+    f.Parent = gui
     
-    -- Заголовок (за него перетаскивается)
-    local title = Instance.new("Frame", f)
+    local mainCorner = Instance.new("UICorner")
+    mainCorner.CornerRadius = UDim.new(0, 12)
+    mainCorner.Parent = f
+    
+    -- Заголовок
+    local title = Instance.new("Frame")
     title.Size = UDim2.new(1, 0, 0, 45)
-    title.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
-    title.Active = true
-    Instance.new("UICorner", title).CornerRadius = UDim.new(0, 12)
+    title.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
+    title.BackgroundTransparency = 0.2
+    title.Parent = f
     
-    local titleText = Instance.new("TextLabel", title)
+    local titleCorner = Instance.new("UICorner")
+    titleCorner.CornerRadius = UDim.new(0, 12)
+    titleCorner.Parent = title
+    
+    local titleText = Instance.new("TextLabel")
     titleText.Size = UDim2.new(1, -60, 1, 0)
     titleText.Position = UDim2.new(0, 15, 0, 0)
     titleText.BackgroundTransparency = 1
     titleText.Text = "🍒 Melony Cheats"
-    titleText.TextColor3 = Color3.fromRGB(255, 100, 150)
+    titleText.TextColor3 = Color3.fromRGB(255, 120, 160)
     titleText.TextSize = 20
     titleText.TextXAlignment = Enum.TextXAlignment.Left
     titleText.Font = Enum.Font.GothamBold
+    titleText.Parent = title
     
-    -- Кнопка закрытия (крестик)
-    local closeBtn = Instance.new("TextButton", title)
+    -- Кнопка закрытия
+    local closeBtn = Instance.new("TextButton")
     closeBtn.Size = UDim2.new(0, 32, 0, 32)
     closeBtn.Position = UDim2.new(1, -40, 0, 6)
-    closeBtn.BackgroundColor3 = Color3.fromRGB(255, 70, 70)
+    closeBtn.BackgroundColor3 = Color3.fromRGB(220, 60, 60)
     closeBtn.Text = "✕"
     closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     closeBtn.TextSize = 18
     closeBtn.Font = Enum.Font.GothamBold
-    Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 8)
+    closeBtn.Parent = title
+    
+    local closeCorner = Instance.new("UICorner")
+    closeCorner.CornerRadius = UDim.new(0, 8)
+    closeCorner.Parent = closeBtn
+    
     closeBtn.MouseButton1Click:Connect(function()
-        gui:Destroy()
-        gui = nil
-        createFloatingIcon() -- создаём текстовую иконку
+        if gui then pcall(function() gui:Destroy() end); gui = nil end
+        createFloatingIcon()
     end)
     
     -- Кнопки настроек
@@ -251,15 +265,19 @@ local function createMenu()
     }
     
     for _, btnData in ipairs(buttons) do
-        local btn = Instance.new("TextButton", f)
+        local btn = Instance.new("TextButton")
         btn.Size = UDim2.new(0, 220, 0, 42)
         btn.Position = UDim2.new(0.5, -110, 0, btnData.y)
-        btn.BackgroundColor3 = (not btnData.isTarget and settings[btnData.setting]) and Color3.fromRGB(100, 180, 100) or Color3.fromRGB(50, 50, 60)
+        btn.BackgroundColor3 = (not btnData.isTarget and settings[btnData.setting]) and Color3.fromRGB(80, 160, 80) or Color3.fromRGB(45, 45, 55)
         btn.Text = btnData.isTarget and ("🎯 " .. settings.targetMode) or (btnData.name .. ": " .. (settings[btnData.setting] and "ON" or "OFF"))
         btn.TextColor3 = Color3.fromRGB(255, 255, 255)
         btn.TextSize = 16
         btn.Font = Enum.Font.GothamBold
-        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 10)
+        btn.Parent = f
+        
+        local btnCorner = Instance.new("UICorner")
+        btnCorner.CornerRadius = UDim.new(0, 10)
+        btnCorner.Parent = btn
         
         btn.MouseButton1Click:Connect(function()
             if btnData.isTarget then
@@ -271,7 +289,7 @@ local function createMenu()
             else
                 settings[btnData.setting] = not settings[btnData.setting]
                 btn.Text = btnData.name .. ": " .. (settings[btnData.setting] and "ON" or "OFF")
-                btn.BackgroundColor3 = settings[btnData.setting] and Color3.fromRGB(100, 180, 100) or Color3.fromRGB(50, 50, 60)
+                btn.BackgroundColor3 = settings[btnData.setting] and Color3.fromRGB(80, 160, 80) or Color3.fromRGB(45, 45, 55)
                 if btnData.setting == "esp" then
                     if settings.esp then setupESP() else clearESP() end
                 end
@@ -279,15 +297,16 @@ local function createMenu()
         end)
     end
     
-    -- Подпись внизу
-    local footer = Instance.new("TextLabel", f)
+    -- Подпись
+    local footer = Instance.new("TextLabel")
     footer.Size = UDim2.new(1, 0, 0, 28)
     footer.Position = UDim2.new(0, 0, 1, -32)
     footer.BackgroundTransparency = 1
     footer.Text = "Melony Scripts | by Melony"
-    footer.TextColor3 = Color3.fromRGB(120, 120, 140)
-    footer.TextSize = 12
+    footer.TextColor3 = Color3.fromRGB(100, 100, 120)
+    footer.TextSize = 11
     footer.Font = Enum.Font.Gotham
+    footer.Parent = f
 end
 
 -- AIMBOT + TRIGGERBOT
@@ -364,14 +383,13 @@ end)
 userInput.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     if input.KeyCode == Enum.KeyCode.RightShift then
-        if not gui or not gui.Parent then
-            if icon then icon:Destroy(); icon = nil end
-            createMenu()
-        end
+        if icon then pcall(function() icon:Destroy() end); icon = nil end
+        if gui then pcall(function() gui:Destroy() end); gui = nil end
+        createMenu()
     end
 end)
 
 -- Запуск
 createMenu()
 if settings.esp then setupESP() end
-print("🍒 Melony Scripts Loaded | ESP + AimBot + TriggerBot")
+print("Melony Scripts Loaded | Press Right Shift to open menu")
