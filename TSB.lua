@@ -1,4 +1,4 @@
--- Melony Scripts | TSB (Real Invisible)
+-- Melony Scripts | TSB (Real Invisible - No Death)
 -- Creator: Melony
 
 local p, plr = game:GetService("Players"), game:GetService("Players").LocalPlayer
@@ -8,8 +8,8 @@ local camera = workspace.CurrentCamera
 
 local gui = nil
 local espObjects = {}
+local originalSizes = {}
 local invisibleActive = false
-local originalPosition = nil
 
 -- Настройки
 local settings = {
@@ -22,80 +22,42 @@ local settings = {
     jumpPower = 80
 }
 
--- РЕАЛЬНАЯ НЕВИДИМОСТЬ (телепортируемся под карту)
-local function setRealInvisible(enabled)
+-- РЕАЛЬНАЯ НЕВИДИМОСТЬ (уменьшаем размер, делаем прозрачным, отключаем столкновения)
+local function setInvisible(enabled)
     local char = plr.Character
     if not char then return end
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
     
     if enabled then
-        -- Сохраняем позицию
-        originalPosition = hrp.Position
-        -- Телепортируемся глубоко под карту
-        hrp.CFrame = CFrame.new(0, -500, 0)
-        -- Отключаем столкновения
-        hrp.CanCollide = false
-        -- Делаем персонажа полупрозрачным (на всякий случай)
+        invisibleActive = true
+        -- Сохраняем оригинальные размеры и делаем всё маленьким
         for _, part in ipairs(char:GetDescendants()) do
             if part:IsA("BasePart") then
-                part.Transparency = 0.8
-            end
-        end
-    else
-        -- Возвращаемся обратно
-        if originalPosition then
-            hrp.CFrame = CFrame.new(originalPosition)
-        end
-        hrp.CanCollide = true
-        -- Восстанавливаем прозрачность
-        for _, part in ipairs(char:GetDescendants()) do
-            if part:IsA("BasePart") then
-                part.Transparency = 0
-            end
-        end
-    end
-end
-
--- АЛЬТЕРНАТИВНЫЙ СПОСОБ (уменьшение размера и телепортация в небо)
-local function setTinyInvisible(enabled)
-    local char = plr.Character
-    if not char then return end
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
-    
-    if enabled then
-        originalPosition = hrp.Position
-        -- Уменьшаем размер до 0
-        for _, part in ipairs(char:GetDescendants()) do
-            if part:IsA("BasePart") then
+                originalSizes[part] = part.Size
                 part.Size = Vector3.new(0.1, 0.1, 0.1)
                 part.Transparency = 1
+                part.CanCollide = false
             end
         end
-        -- Телепортируем в небо
-        hrp.CFrame = CFrame.new(0, 1000, 0)
-        hrp.CanCollide = false
-    else
-        -- Восстанавливаем
-        if originalPosition then
-            hrp.CFrame = CFrame.new(originalPosition)
+        -- Отключаем человеческую модель (чтобы не было тени)
+        local humanoid = char:FindFirstChild("Humanoid")
+        if humanoid then
+            humanoid.BlockOffset = Vector3.new(0, 0, 0)
         end
-        hrp.CanCollide = true
-        -- Восстанавливаем размер (нужно пересоздать персонажа)
-        plr.Character:BreakJoints()
-        task.wait(0.5)
-    end
-end
-
--- Используем первый вариант (телепортация под карту)
-local function setInvisible(enabled)
-    if enabled then
-        setRealInvisible(true)
-        invisibleActive = true
     else
-        setRealInvisible(false)
         invisibleActive = false
+        -- Восстанавливаем размеры
+        for part, size in pairs(originalSizes) do
+            if part and part.Parent then
+                part.Size = size
+                part.Transparency = 0
+                part.CanCollide = true
+            end
+        end
+        originalSizes = {}
+        local humanoid = char:FindFirstChild("Humanoid")
+        if humanoid then
+            humanoid.BlockOffset = nil
+        end
     end
 end
 
@@ -440,7 +402,7 @@ createMenu()
 setSpeed(settings.speed)
 setSuperJump(settings.superJump)
 
-print("✅ Melony Scripts | TSB Real Invisible")
-print("👻 Invisible teleports you UNDER the map - others won't see you!")
+print("✅ Melony Scripts | TSB Real Invisible (No Death)")
+print("👻 Invisible: your character becomes tiny and transparent")
 print("⚡ Speed | 🦘 Super Jump | ✈️ Fly")
 print("⌨️ Press Right Shift to open menu")
