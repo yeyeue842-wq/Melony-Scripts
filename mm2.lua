@@ -1,4 +1,4 @@
--- Melony Scripts | MM2 Ultimate (FIXED ESP)
+-- Melony Scripts | MM2 Ultimate (Role Lock Fix)
 -- Creator: Melony
 
 local p, plr = game:GetService("Players"), game:GetService("Players").LocalPlayer
@@ -7,9 +7,9 @@ local camera = workspace.CurrentCamera
 local userInput = game:GetService("UserInputService")
 
 local gui = nil
-local icon = nil
 local espObjects = {}
-local playerRoles = {}
+local playerRoles = {} -- ЗАФИКСИРОВАННЫЕ роли (не сбрасываются)
+local roundActive = true
 
 -- Настройки
 local settings = {
@@ -20,21 +20,17 @@ local settings = {
     smoothness = 0.3
 }
 
--- Функция определения роли
-local function getRoleByWeapon(player)
-    if not player.Character then 
-        return playerRoles[player] or "Innocent"
-    end
+-- ОПРЕДЕЛЕНИЕ РОЛИ ПО ОРУЖИЮ (с фиксацией)
+local function detectRoleByWeapon(player)
+    if not player.Character then return nil end
     
     local tool = player.Character:FindFirstChildOfClass("Tool")
     if tool then
         local toolName = tool.Name:lower()
         if toolName:find("knife") or toolName:find("dagger") or toolName:find("blade") or toolName:find("sword") then
-            playerRoles[player] = "Murderer"
             return "Murderer"
         end
         if toolName:find("gun") or toolName:find("pistol") or toolName:find("revolver") then
-            playerRoles[player] = "Sheriff"
             return "Sheriff"
         end
     end
@@ -43,29 +39,100 @@ local function getRoleByWeapon(player)
         if v:IsA("Accessory") or v:IsA("Tool") then
             local name = v.Name:lower()
             if name:find("knife") or name:find("blade") then
-                playerRoles[player] = "Murderer"
                 return "Murderer"
             end
             if name:find("gun") or name:find("pistol") then
-                playerRoles[player] = "Sheriff"
                 return "Sheriff"
             end
         end
     end
     
+    return nil
+end
+
+-- ПОЛУЧЕНИЕ РОЛИ (с фиксацией)
+local function getRole(player)
+    -- Если у игрока уже есть зафиксированная роль, возвращаем её
     if playerRoles[player] then
         return playerRoles[player]
     end
+    
+    -- Если нет фиксации, пробуем определить по оружию
+    local detected = detectRoleByWeapon(player)
+    if detected then
+        playerRoles[player] = detected -- ФИКСИРУЕМ роль!
+        return detected
+    end
+    
     return "Innocent"
 end
 
+-- СБРОС ВСЕХ РОЛЕЙ (при новом раунде)
+local function resetAllRoles()
+    playerRoles = {}
+    -- Пересоздаём ESP для всех игроков
+    for _, obj in pairs(espObjects) do
+        pcall(function()
+            if obj.highlight then obj.highlight:Destroy() end
+            if obj.billboard then obj.billboard:Destroy() end
+        end)
+    end
+    espObjects = {}
+    -- Заново создаём ESP
+    for _, player in ipairs(p:GetPlayers()) do
+        if player ~= plr and player.Character then
+            createESP(player)
+        end
+    end
+    print("🔄 Новый раунд! Роли сброшены.")
+end
+
+-- ОТСЛЕЖИВАНИЕ НОВОГО РАУНДА (когда игроки респавнятся)
+local function onCharacterAdded(player, character)
+    task.wait(1) -- Ждём загрузки
+    
+    -- Если игрок респавнится (новый раунд) - сбрасываем ВСЕ роли
+    if player == plr then
+        resetAllRoles()
+    else
+        -- Для других игроков: проверяем, есть ли у них зафиксированная роль
+        if not playerRoles[player] then
+            -- Если нет роли, пробуем определить
+            local detected = detectRoleByWeapon(player)
+            if detected then
+                playerRoles[player] = detected
+            end
+        end
+        -- Обновляем ESP
+        if espObjects[player] then
+            updateESP(player)
+        else
+            createESP(player)
+        end
+    end
+end
+
+-- Отслеживание респавна
+for _, player in ipairs(p:GetPlayers()) do
+    player.CharacterAdded:Connect(function(character)
+        onCharacterAdded(player, character)
+    end)
+end
+
+p.PlayerAdded:Connect(function(player)
+    player.CharacterAdded:Connect(function(character)
+        onCharacterAdded(player, character)
+    end)
+end)
+
+-- Цвета
 local colors = {
     Murderer = Color3.fromRGB(255, 50, 50),
     Sheriff = Color3.fromRGB(50, 100, 255),
     Innocent = Color3.fromRGB(100, 255, 100)
 }
 
--- Функция получения головы или торса
+-- Функция получения точки привязки
 local function getAttachmentPoint(character)
     if character:FindFirstChild("Head") then
         return character.Head
@@ -77,15 +144,18 @@ local function getAttachmentPoint(character)
     return character:FindFirstChildWhichIsA("BasePart")
 end
 
--- СОЗДАНИЕ ESP (исправленное)
+-- СОЗДАНИЕ ESP
 local function createESP(player)
     if not player.Character or player == plr then return end
-    if espObjects[player] then return end
+    if espObjects[player] then 
+        updateESP(player)
+        return 
+    end
     
-    local role = getRoleByWeapon(player)
+    local role = getRole(player)
     local character = player.Character
     
-    -- Highlight (подсветка)
+    -- Highlight
     local highlight = Instance.new("Highlight")
     highlight.FillColor = colors[role]
     highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
@@ -93,17 +163,16 @@ local function createESP(player)
     highlight.OutlineTransparency = 0.2
     highlight.Parent = character
     
-    -- BillboardGui для имени (прикрепляем к голове)
+    -- BillboardGui
     local billboard = Instance.new("BillboardGui")
     billboard.Name = "MelonyESP"
     billboard.Size = UDim2.new(0, 200, 0, 40)
     billboard.StudsOffset = Vector3.new(0, 2.5, 0)
     billboard.AlwaysOnTop = true
     billboard.MaxDistance = 150
-    billboard.Adornee = getAttachmentPoint(character) -- Прикрепляем к голове/торсу
+    billboard.Adornee = getAttachmentPoint(character)
     billboard.Parent = character
     
-    -- Текст
     local textLabel = Instance.new("TextLabel")
     textLabel.Size = UDim2.new(1, 0, 1, 0)
     textLabel.BackgroundTransparency = 1
@@ -113,6 +182,17 @@ local function createESP(player)
     textLabel.TextScaled = true
     textLabel.Font = Enum.Font.GothamBold
     textLabel.Parent = billboard
+    
+    -- Иконка оружия
+    local iconLabel = Instance.new("TextLabel")
+    iconLabel.Size = UDim2.new(0, 30, 1, 0)
+    iconLabel.Position = UDim2.new(1, 5, 0, 0)
+    iconLabel.BackgroundTransparency = 1
+    iconLabel.Text = role == "Murderer" and "🔪" or (role == "Sheriff" and "🔫" or "🛡️")
+    iconLabel.TextColor3 = colors[role]
+    iconLabel.TextSize = 20
+    iconLabel.Font = Enum.Font.GothamBold
+    iconLabel.Parent = billboard
     
     espObjects[player] = {
         highlight = highlight,
@@ -124,21 +204,31 @@ end
 -- Обновление ESP
 local function updateESP(player)
     if not espObjects[player] then return end
-    local newRole = getRoleByWeapon(player)
-    if espObjects[player].role ~= newRole then
-        espObjects[player].role = newRole
+    local role = getRole(player) -- Берём фиксированную роль
+    
+    if espObjects[player].role ~= role then
+        espObjects[player].role = role
         if espObjects[player].highlight then
-            espObjects[player].highlight.FillColor = colors[newRole]
+            espObjects[player].highlight.FillColor = colors[role]
         end
         if espObjects[player].billboard then
             local text = espObjects[player].billboard:FindFirstChildOfClass("TextLabel")
             if text then
-                text.Text = player.Name .. " [" .. newRole .. "]"
-                text.TextColor3 = colors[newRole]
+                text.Text = player.Name .. " [" .. role .. "]"
+                text.TextColor3 = colors[role]
+            end
+            -- Обновляем иконку
+            local children = espObjects[player].billboard:GetChildren()
+            for _, child in ipairs(children) do
+                if child:IsA("TextLabel") and child ~= text then
+                    child.Text = role == "Murderer" and "🔪" or (role == "Sheriff" and "🔫" or "🛡️")
+                    child.TextColor3 = colors[role]
+                end
             end
         end
     end
-    -- Обновляем Adornee если персонаж изменился
+    
+    -- Обновляем привязку
     if espObjects[player].billboard and player.Character then
         local attach = getAttachmentPoint(player.Character)
         if attach then
@@ -160,16 +250,8 @@ end
 local function setupESP()
     clearESP()
     for _, player in ipairs(p:GetPlayers()) do
-        if player ~= plr then
-            if player.Character then
-                createESP(player)
-            end
-            player.CharacterAdded:Connect(function(char)
-                task.wait(0.5)
-                if settings.esp then
-                    createESP(player)
-                end
-            end)
+        if player ~= plr and player.Character then
+            createESP(player)
         end
     end
 end
@@ -180,7 +262,7 @@ local function getTarget()
     local closest, closestDist = nil, math.huge
     for _, v in ipairs(p:GetPlayers()) do
         if v ~= plr and v.Character and v.Character:FindFirstChild("Head") and v.Character:FindFirstChild("Humanoid") and v.Character.Humanoid.Health > 0 then
-            local role = getRoleByWeapon(v)
+            local role = getRole(v)
             if settings.targetMode == "All" or (settings.targetMode == "Murderer" and role == "Murderer") or (settings.targetMode == "Sheriff" and role == "Sheriff") then
                 local headPos = v.Character.Head.Position
                 local screenPos, onScreen = camera:WorldToViewportPoint(headPos)
@@ -228,14 +310,10 @@ local function createMenu()
     f.Size = UDim2.new(0, 280, 0, 280)
     f.Position = UDim2.new(0.5, -140, 0.5, -140)
     f.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
-    f.BackgroundTransparency = 0.1
     f.Active = true
     f.Draggable = true
     f.Parent = gui
-    
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 12)
-    corner.Parent = f
+    Instance.new("UICorner", f).CornerRadius = UDim.new(0, 12)
     
     -- Заголовок
     local title = Instance.new("Frame")
@@ -266,7 +344,6 @@ local function createMenu()
     closeBtn.Font = Enum.Font.GothamBold
     closeBtn.Parent = title
     Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 8)
-    
     closeBtn.MouseButton1Click:Connect(function()
         pcall(function() if gui then gui:Destroy(); gui = nil end end)
     end)
@@ -293,7 +370,6 @@ local function createMenu()
                 if settings.esp then setupESP() else clearESP() end
             end
         end)
-        return btn
     end
     
     createButton("ESP", "esp", yPos)
@@ -319,42 +395,7 @@ local function createMenu()
         settings.targetMode = modes[idx]
         targetBtn.Text = "🎯 Target: " .. settings.targetMode
     end)
-    
-    local footer = Instance.new("TextLabel")
-    footer.Size = UDim2.new(1, 0, 0, 25)
-    footer.Position = UDim2.new(0, 0, 1, -28)
-    footer.BackgroundTransparency = 1
-    footer.Text = "Melony Scripts | by Melony"
-    footer.TextColor3 = Color3.fromRGB(100, 100, 120)
-    footer.TextSize = 11
-    footer.Font = Enum.Font.Gotham
-    footer.Parent = f
 end
-
--- Отслеживание смены оружия
-for _, player in ipairs(p:GetPlayers()) do
-    if player ~= plr then
-        player.CharacterAdded:Connect(function(char)
-            task.wait(0.5)
-            if espObjects[player] then updateESP(player) end
-            local function onTool(child)
-                if child:IsA("Tool") then
-                    task.wait(0.2)
-                    updateESP(player)
-                end
-            end
-            char.ChildAdded:Connect(onTool)
-            char.ChildRemoved:Connect(onTool)
-        end)
-    end
-end
-
-p.PlayerAdded:Connect(function(player)
-    player.CharacterAdded:Connect(function()
-        task.wait(0.5)
-        if settings.esp then createESP(player) end
-    end)
-end)
 
 -- Основной цикл
 runService.RenderStepped:Connect(function()
@@ -391,6 +432,7 @@ end)
 createMenu()
 setupESP()
 
-print("✅ Melony Scripts Loaded | ESP Fixed")
-print("⌨️ Press Right Shift to toggle menu")
-print("🔪 Murderer = Red | 👮 Sheriff = Blue | 😇 Innocent = Green")
+print("✅ Melony Scripts Loaded | Role Lock Fix")
+print("🔪 Murderer stays RED even without knife!")
+print("👮 Sheriff stays BLUE even without gun!")
+print("🔄 Roles reset only on new round")
