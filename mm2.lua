@@ -1,29 +1,32 @@
--- Melony Scripts | MM2 Ultimate (Role Lock Fix)
+-- Melony Scripts | MM2 Ultimate (Dropped Gun ESP)
 -- Creator: Melony
 
 local p, plr = game:GetService("Players"), game:GetService("Players").LocalPlayer
 local runService = game:GetService("RunService")
 local camera = workspace.CurrentCamera
 local userInput = game:GetService("UserInputService")
+local mouse = plr:GetMouse()
 
 local gui = nil
 local espObjects = {}
-local playerRoles = {} -- ЗАФИКСИРОВАННЫЕ роли (не сбрасываются)
-local roundActive = true
+local gunEspObjects = {}
+local playerRoles = {}
 
 -- Настройки
 local settings = {
     esp = true,
+    gunEsp = true,      -- ESP на выпавший пистолет
     aimbot = true,
     triggerbot = true,
     targetMode = "All",
-    smoothness = 0.3
+    smoothness = 0.3,
+    aimPart = "Head",
+    fov = 150
 }
 
--- ОПРЕДЕЛЕНИЕ РОЛИ ПО ОРУЖИЮ (с фиксацией)
+-- ОПРЕДЕЛЕНИЕ РОЛИ
 local function detectRoleByWeapon(player)
     if not player.Character then return nil end
-    
     local tool = player.Character:FindFirstChildOfClass("Tool")
     if tool then
         local toolName = tool.Name:lower()
@@ -34,43 +37,19 @@ local function detectRoleByWeapon(player)
             return "Sheriff"
         end
     end
-    
-    for _, v in ipairs(player.Character:GetChildren()) do
-        if v:IsA("Accessory") or v:IsA("Tool") then
-            local name = v.Name:lower()
-            if name:find("knife") or name:find("blade") then
-                return "Murderer"
-            end
-            if name:find("gun") or name:find("pistol") then
-                return "Sheriff"
-            end
-        end
-    end
-    
     return nil
 end
 
--- ПОЛУЧЕНИЕ РОЛИ (с фиксацией)
 local function getRole(player)
-    -- Если у игрока уже есть зафиксированная роль, возвращаем её
-    if playerRoles[player] then
-        return playerRoles[player]
-    end
-    
-    -- Если нет фиксации, пробуем определить по оружию
+    if playerRoles[player] then return playerRoles[player] end
     local detected = detectRoleByWeapon(player)
-    if detected then
-        playerRoles[player] = detected -- ФИКСИРУЕМ роль!
-        return detected
-    end
-    
+    if detected then playerRoles[player] = detected return detected end
     return "Innocent"
 end
 
--- СБРОС ВСЕХ РОЛЕЙ (при новом раунде)
-local function resetAllRoles()
+-- Сброс ролей при новом раунде
+local function resetRoles()
     playerRoles = {}
-    -- Пересоздаём ESP для всех игроков
     for _, obj in pairs(espObjects) do
         pcall(function()
             if obj.highlight then obj.highlight:Destroy() end
@@ -78,162 +57,95 @@ local function resetAllRoles()
         end)
     end
     espObjects = {}
-    -- Заново создаём ESP
     for _, player in ipairs(p:GetPlayers()) do
-        if player ~= plr and player.Character then
-            createESP(player)
-        end
-    end
-    print("🔄 Новый раунд! Роли сброшены.")
-end
-
--- ОТСЛЕЖИВАНИЕ НОВОГО РАУНДА (когда игроки респавнятся)
-local function onCharacterAdded(player, character)
-    task.wait(1) -- Ждём загрузки
-    
-    -- Если игрок респавнится (новый раунд) - сбрасываем ВСЕ роли
-    if player == plr then
-        resetAllRoles()
-    else
-        -- Для других игроков: проверяем, есть ли у них зафиксированная роль
-        if not playerRoles[player] then
-            -- Если нет роли, пробуем определить
-            local detected = detectRoleByWeapon(player)
-            if detected then
-                playerRoles[player] = detected
-            end
-        end
-        -- Обновляем ESP
-        if espObjects[player] then
-            updateESP(player)
-        else
-            createESP(player)
-        end
+        if player ~= plr and player.Character then createESP(player) end
     end
 end
 
--- Отслеживание респавна
+plr.CharacterAdded:Connect(function() task.wait(1); resetRoles(); clearDroppedGuns() end)
 for _, player in ipairs(p:GetPlayers()) do
-    player.CharacterAdded:Connect(function(character)
-        onCharacterAdded(player, character)
+    player.CharacterAdded:Connect(function()
+        task.wait(0.5)
+        if player ~= plr then
+            playerRoles[player] = nil
+            if espObjects[player] then updateESP(player) end
+        end
     end)
 end
 
-p.PlayerAdded:Connect(function(player)
-    player.CharacterAdded:Connect(function(character)
-        onCharacterAdded(player, character)
-    end)
-end)
-
--- Цвета
+-- Цвета ESP
 local colors = {
     Murderer = Color3.fromRGB(255, 50, 50),
     Sheriff = Color3.fromRGB(50, 100, 255),
-    Innocent = Color3.fromRGB(100, 255, 100)
+    Innocent = Color3.fromRGB(100, 255, 100),
+    DroppedGun = Color3.fromRGB(255, 200, 50)  -- Золотой
 }
 
--- Функция получения точки привязки
+-- ESP на игроков
 local function getAttachmentPoint(character)
-    if character:FindFirstChild("Head") then
-        return character.Head
-    elseif character:FindFirstChild("UpperTorso") then
-        return character.UpperTorso
-    elseif character:FindFirstChild("Torso") then
-        return character.Torso
-    end
+    if character:FindFirstChild("Head") then return character.Head end
+    if character:FindFirstChild("UpperTorso") then return character.UpperTorso end
     return character:FindFirstChildWhichIsA("BasePart")
 end
 
--- СОЗДАНИЕ ESP
 local function createESP(player)
     if not player.Character or player == plr then return end
-    if espObjects[player] then 
-        updateESP(player)
-        return 
-    end
-    
+    if espObjects[player] then return end
     local role = getRole(player)
     local character = player.Character
-    
-    -- Highlight
+    local color = colors[role]
     local highlight = Instance.new("Highlight")
-    highlight.FillColor = colors[role]
+    highlight.FillColor = color
     highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
     highlight.FillTransparency = 0.5
-    highlight.OutlineTransparency = 0.2
     highlight.Parent = character
-    
-    -- BillboardGui
     local billboard = Instance.new("BillboardGui")
-    billboard.Name = "MelonyESP"
-    billboard.Size = UDim2.new(0, 200, 0, 40)
+    billboard.Size = UDim2.new(0, 180, 0, 35)
     billboard.StudsOffset = Vector3.new(0, 2.5, 0)
     billboard.AlwaysOnTop = true
-    billboard.MaxDistance = 150
     billboard.Adornee = getAttachmentPoint(character)
     billboard.Parent = character
-    
-    local textLabel = Instance.new("TextLabel")
-    textLabel.Size = UDim2.new(1, 0, 1, 0)
-    textLabel.BackgroundTransparency = 1
-    textLabel.Text = player.Name .. " [" .. role .. "]"
-    textLabel.TextColor3 = colors[role]
-    textLabel.TextStrokeTransparency = 0.3
-    textLabel.TextScaled = true
-    textLabel.Font = Enum.Font.GothamBold
-    textLabel.Parent = billboard
-    
-    -- Иконка оружия
-    local iconLabel = Instance.new("TextLabel")
-    iconLabel.Size = UDim2.new(0, 30, 1, 0)
-    iconLabel.Position = UDim2.new(1, 5, 0, 0)
-    iconLabel.BackgroundTransparency = 1
-    iconLabel.Text = role == "Murderer" and "🔪" or (role == "Sheriff" and "🔫" or "🛡️")
-    iconLabel.TextColor3 = colors[role]
-    iconLabel.TextSize = 20
-    iconLabel.Font = Enum.Font.GothamBold
-    iconLabel.Parent = billboard
-    
-    espObjects[player] = {
-        highlight = highlight,
-        billboard = billboard,
-        role = role
-    }
+    local text = Instance.new("TextLabel")
+    text.Size = UDim2.new(1, 0, 1, 0)
+    text.BackgroundTransparency = 1
+    text.Text = player.Name .. " [" .. role .. "]"
+    text.TextColor3 = color
+    text.TextScaled = true
+    text.Font = Enum.Font.GothamBold
+    text.Parent = billboard
+    local icon = Instance.new("TextLabel")
+    icon.Size = UDim2.new(0, 30, 1, 0)
+    icon.Position = UDim2.new(1, 5, 0, 0)
+    icon.BackgroundTransparency = 1
+    icon.Text = role == "Murderer" and "🔪" or (role == "Sheriff" and "🔫" or "🛡️")
+    icon.TextColor3 = color
+    icon.TextSize = 20
+    icon.Parent = billboard
+    espObjects[player] = {highlight = highlight, billboard = billboard, role = role}
 end
 
--- Обновление ESP
 local function updateESP(player)
     if not espObjects[player] then return end
-    local role = getRole(player) -- Берём фиксированную роль
-    
-    if espObjects[player].role ~= role then
-        espObjects[player].role = role
-        if espObjects[player].highlight then
-            espObjects[player].highlight.FillColor = colors[role]
+    local newRole = getRole(player)
+    local color = colors[newRole]
+    if espObjects[player].role ~= newRole then
+        espObjects[player].role = newRole
+        espObjects[player].highlight.FillColor = color
+        local text = espObjects[player].billboard:FindFirstChildOfClass("TextLabel")
+        if text then
+            text.Text = player.Name .. " [" .. newRole .. "]"
+            text.TextColor3 = color
         end
-        if espObjects[player].billboard then
-            local text = espObjects[player].billboard:FindFirstChildOfClass("TextLabel")
-            if text then
-                text.Text = player.Name .. " [" .. role .. "]"
-                text.TextColor3 = colors[role]
-            end
-            -- Обновляем иконку
-            local children = espObjects[player].billboard:GetChildren()
-            for _, child in ipairs(children) do
-                if child:IsA("TextLabel") and child ~= text then
-                    child.Text = role == "Murderer" and "🔪" or (role == "Sheriff" and "🔫" or "🛡️")
-                    child.TextColor3 = colors[role]
-                end
+        for _, child in ipairs(espObjects[player].billboard:GetChildren()) do
+            if child:IsA("TextLabel") and child ~= text then
+                child.Text = newRole == "Murderer" and "🔪" or (newRole == "Sheriff" and "🔫" or "🛡️")
+                child.TextColor3 = color
             end
         end
     end
-    
-    -- Обновляем привязку
     if espObjects[player].billboard and player.Character then
         local attach = getAttachmentPoint(player.Character)
-        if attach then
-            espObjects[player].billboard.Adornee = attach
-        end
+        if attach then espObjects[player].billboard.Adornee = attach end
     end
 end
 
@@ -247,56 +159,183 @@ local function clearESP()
     espObjects = {}
 end
 
-local function setupESP()
-    clearESP()
+-- ========== ОТСЛЕЖИВАНИЕ ВЫПАВШЕГО ПИСТОЛЕТА ==========
+-- Проверка, является ли объект активным инструментом (в руках)
+local function isActiveTool(obj)
+    if not obj or not obj.Parent then return false end
+    -- Проверяем, что объект находится в персонаже игрока
     for _, player in ipairs(p:GetPlayers()) do
-        if player ~= plr and player.Character then
-            createESP(player)
+        if player.Character and obj:IsDescendantOf(player.Character) then
+            return true
         end
     end
+    return false
 end
 
--- AIMBOT + TRIGGERBOT
-local function getTarget()
-    if not settings.aimbot and not settings.triggerbot then return nil end
-    local closest, closestDist = nil, math.huge
-    for _, v in ipairs(p:GetPlayers()) do
-        if v ~= plr and v.Character and v.Character:FindFirstChild("Head") and v.Character:FindFirstChild("Humanoid") and v.Character.Humanoid.Health > 0 then
-            local role = getRole(v)
-            if settings.targetMode == "All" or (settings.targetMode == "Murderer" and role == "Murderer") or (settings.targetMode == "Sheriff" and role == "Sheriff") then
-                local headPos = v.Character.Head.Position
-                local screenPos, onScreen = camera:WorldToViewportPoint(headPos)
-                local screenCenter = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
-                local dist = (screenCenter - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
-                if onScreen and dist < closestDist then
-                    closestDist, closest = dist, v
+-- Поиск выпавшего пистолета (не в руках игрока)
+local function findDroppedGun()
+    for _, v in ipairs(workspace:GetDescendants()) do
+        -- Ищем объекты, похожие на пистолет
+        if v:IsA("BasePart") or v:IsA("Tool") or v:IsA("Model") then
+            local name = v.Name:lower()
+            if name:find("gun") or name:find("pistol") or name:find("revolver") then
+                -- НЕ показываем, если пистолет в руках игрока
+                if not isActiveTool(v) then
+                    -- Дополнительно проверяем, что это не часть модели персонажа (пояс)
+                    local isOnBelt = false
+                    for _, player in ipairs(p:GetPlayers()) do
+                        if player.Character and v:IsDescendantOf(player.Character) then
+                            -- Если пистолет является частью персонажа (на поясе) и не в руках
+                            -- Ищем, есть ли у этого игрока активный инструмент (пистолет в руках)
+                            local hasActiveGun = false
+                            if player.Character:FindFirstChildOfClass("Tool") then
+                                hasActiveGun = true
+                            end
+                            -- Если у игрока нет активного пистолета в руках, значит это выпавший
+                            if not hasActiveGun then
+                                isOnBelt = false
+                            else
+                                isOnBelt = true
+                            end
+                            break
+                        end
+                    end
+                    if not isOnBelt then
+                        return v
+                    end
                 end
             end
         end
     end
-    return closest
+    return nil
 end
 
-local function triggerbot()
-    if not settings.triggerbot then return end
-    local target = getTarget()
-    if target then
-        local tool = plr.Character:FindFirstChildOfClass("Tool")
-        if tool then pcall(function() tool:Activate() end) end
+-- Создание ESP для выпавшего пистолета
+local function createDroppedGunESP(gun)
+    if gunEspObjects[gun] then return end
+    if not gun or not gun.Parent then return end
+    
+    local highlight = Instance.new("Highlight")
+    highlight.FillColor = colors.DroppedGun
+    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+    highlight.FillTransparency = 0.3
+    highlight.Parent = gun
+    
+    local billboard = Instance.new("BillboardGui")
+    billboard.Size = UDim2.new(0, 140, 0, 32)
+    billboard.StudsOffset = Vector3.new(0, 1, 0)
+    billboard.AlwaysOnTop = true
+    billboard.Parent = gun
+    
+    local text = Instance.new("TextLabel")
+    text.Size = UDim2.new(1, 0, 1, 0)
+    text.BackgroundTransparency = 1
+    text.Text = "🔫 SHERIFF GUN (DROPPED)"
+    text.TextColor3 = colors.DroppedGun
+    text.TextScaled = true
+    text.Font = Enum.Font.GothamBold
+    text.Parent = billboard
+    
+    gunEspObjects[gun] = {highlight = highlight, billboard = billboard}
+end
+
+local function clearDroppedGuns()
+    for _, obj in pairs(gunEspObjects) do
+        pcall(function()
+            if obj.highlight then obj.highlight:Destroy() end
+            if obj.billboard then obj.billboard:Destroy() end
+        end)
     end
+    gunEspObjects = {}
+end
+
+local function updateDroppedGunESP()
+    if not settings.gunEsp then 
+        clearDroppedGuns()
+        return 
+    end
+    
+    local gun = findDroppedGun()
+    
+    -- Удаляем ESP если пистолет исчез или был подобран
+    for g, obj in pairs(gunEspObjects) do
+        if g ~= gun or not g.Parent then
+            pcall(function()
+                if obj.highlight then obj.highlight:Destroy() end
+                if obj.billboard then obj.billboard:Destroy() end
+            end)
+            gunEspObjects[g] = nil
+        end
+    end
+    
+    -- Создаём ESP для найденного пистолета
+    if gun and gun.Parent then
+        if not gunEspObjects[gun] then
+            createDroppedGunESP(gun)
+        end
+    end
+end
+
+-- ========== AIMBOT + TRIGGERBOT ==========
+local function isVisible(targetPart)
+    local origin = camera.CFrame.Position
+    local direction = (targetPart.Position - origin).Unit
+    local ray = Ray.new(origin, direction * (targetPart.Position - origin).Magnitude)
+    local hit = workspace:FindPartOnRay(ray, plr.Character)
+    if hit and hit:IsDescendantOf(targetPart.Parent) then
+        return true
+    end
+    return false
+end
+
+local function getTarget()
+    local bestTarget = nil
+    local bestDist = math.huge
+    
+    for _, v in ipairs(p:GetPlayers()) do
+        if v ~= plr and v.Character and v.Character:FindFirstChild(settings.aimPart) then
+            local role = getRole(v)
+            if settings.targetMode == "All" or 
+               (settings.targetMode == "Murderer" and role == "Murderer") or 
+               (settings.targetMode == "Sheriff" and role == "Sheriff") then
+                
+                local part = v.Character[settings.aimPart]
+                local screenPos, onScreen = camera:WorldToViewportPoint(part.Position)
+                
+                if onScreen then
+                    local dist = (Vector2.new(mouse.X, mouse.Y) - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
+                    if dist < bestDist and dist < settings.fov then
+                        bestDist = dist
+                        bestTarget = {player = v, part = part, screenDist = dist}
+                    end
+                end
+            end
+        end
+    end
+    
+    return bestTarget
 end
 
 local function aimbot()
     if not settings.aimbot then return end
     local target = getTarget()
-    if target and target.Character and target.Character:FindFirstChild("Head") then
-        local headPos = target.Character.Head.Position
-        local cf = CFrame.new(camera.CFrame.Position, headPos)
+    if target and target.part and isVisible(target.part) then
+        local targetPos = target.part.Position
+        local cf = CFrame.new(camera.CFrame.Position, targetPos)
         camera.CFrame = camera.CFrame:Lerp(cf, settings.smoothness)
     end
 end
 
--- Создание меню
+local function triggerbot()
+    if not settings.triggerbot then return end
+    local target = getTarget()
+    if target and target.part and target.screenDist < 30 and isVisible(target.part) then
+        local tool = plr.Character:FindFirstChildOfClass("Tool")
+        if tool then tool:Activate() end
+    end
+end
+
+-- ========== МЕНЮ ==========
 local function createMenu()
     pcall(function() if gui then gui:Destroy() end end)
     
@@ -307,8 +346,8 @@ local function createMenu()
     if gui.IgnoreGuiInset then gui.IgnoreGuiInset = true end
     
     local f = Instance.new("Frame")
-    f.Size = UDim2.new(0, 280, 0, 280)
-    f.Position = UDim2.new(0.5, -140, 0.5, -140)
+    f.Size = UDim2.new(0, 300, 0, 420)
+    f.Position = UDim2.new(0.5, -150, 0.5, -210)
     f.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
     f.Active = true
     f.Draggable = true
@@ -326,14 +365,13 @@ local function createMenu()
     titleText.Size = UDim2.new(1, -60, 1, 0)
     titleText.Position = UDim2.new(0, 15, 0, 0)
     titleText.BackgroundTransparency = 1
-    titleText.Text = "Melony Cheats"
-    titleText.TextColor3 = Color3.fromRGB(255, 120, 160)
-    titleText.TextSize = 20
+    titleText.Text = "Melony Cheats | MM2"
+    titleText.TextColor3 = Color3.fromRGB(255, 100, 100)
+    titleText.TextSize = 18
     titleText.TextXAlignment = Enum.TextXAlignment.Left
     titleText.Font = Enum.Font.GothamBold
     titleText.Parent = title
     
-    -- Кнопка закрытия
     local closeBtn = Instance.new("TextButton")
     closeBtn.Size = UDim2.new(0, 32, 0, 32)
     closeBtn.Position = UDim2.new(1, -40, 0, 6)
@@ -348,20 +386,18 @@ local function createMenu()
         pcall(function() if gui then gui:Destroy(); gui = nil end end)
     end)
     
-    -- Кнопки
-    local yPos = 60
-    local function createButton(name, setting, y)
+    local y = 55
+    local function createButton(name, setting, yPos)
         local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(0, 220, 0, 40)
-        btn.Position = UDim2.new(0.5, -110, 0, y)
+        btn.Size = UDim2.new(0, 260, 0, 36)
+        btn.Position = UDim2.new(0.5, -130, 0, yPos)
         btn.BackgroundColor3 = settings[setting] and Color3.fromRGB(80, 160, 80) or Color3.fromRGB(45, 45, 55)
         btn.Text = name .. ": " .. (settings[setting] and "ON" or "OFF")
         btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        btn.TextSize = 16
+        btn.TextSize = 14
         btn.Font = Enum.Font.GothamBold
         btn.Parent = f
         Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 10)
-        
         btn.MouseButton1Click:Connect(function()
             settings[setting] = not settings[setting]
             btn.Text = name .. ": " .. (settings[setting] and "ON" or "OFF")
@@ -370,24 +406,25 @@ local function createMenu()
                 if settings.esp then setupESP() else clearESP() end
             end
         end)
+        return btn
     end
     
-    createButton("ESP", "esp", yPos)
-    createButton("AimBot", "aimbot", yPos + 50)
-    createButton("TriggerBot", "triggerbot", yPos + 100)
+    createButton("👁️ ESP Players", "esp", y)
+    createButton("🔫 Dropped Gun ESP", "gunEsp", y + 42)
+    createButton("🎯 AimBot", "aimbot", y + 84)
+    createButton("🔫 TriggerBot", "triggerbot", y + 126)
     
     -- Выбор цели
     local targetBtn = Instance.new("TextButton")
-    targetBtn.Size = UDim2.new(0, 220, 0, 40)
-    targetBtn.Position = UDim2.new(0.5, -110, 0, yPos + 150)
+    targetBtn.Size = UDim2.new(0, 260, 0, 36)
+    targetBtn.Position = UDim2.new(0.5, -130, 0, y + 168)
     targetBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
     targetBtn.Text = "🎯 Target: " .. settings.targetMode
     targetBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    targetBtn.TextSize = 16
+    targetBtn.TextSize = 14
     targetBtn.Font = Enum.Font.GothamBold
     targetBtn.Parent = f
     Instance.new("UICorner", targetBtn).CornerRadius = UDim.new(0, 10)
-    
     targetBtn.MouseButton1Click:Connect(function()
         local modes = {"All", "Murderer", "Sheriff"}
         local idx = table.find(modes, settings.targetMode) or 1
@@ -395,6 +432,83 @@ local function createMenu()
         settings.targetMode = modes[idx]
         targetBtn.Text = "🎯 Target: " .. settings.targetMode
     end)
+    
+    -- Ползунок FOV
+    local fovLabel = Instance.new("TextLabel")
+    fovLabel.Size = UDim2.new(0, 80, 0, 25)
+    fovLabel.Position = UDim2.new(0.5, -130, 0, y + 212)
+    fovLabel.BackgroundTransparency = 1
+    fovLabel.Text = "FOV: " .. settings.fov
+    fovLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+    fovLabel.TextSize = 11
+    fovLabel.Font = Enum.Font.Gotham
+    fovLabel.Parent = f
+    
+    local fovSlider = Instance.new("TextButton")
+    fovSlider.Size = UDim2.new(0, 120, 0, 18)
+    fovSlider.Position = UDim2.new(0.5, -20, 0, y + 213)
+    fovSlider.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+    fovSlider.Text = ""
+    fovSlider.Parent = f
+    Instance.new("UICorner", fovSlider).CornerRadius = UDim.new(0, 9)
+    local fovFill = Instance.new("Frame")
+    fovFill.Size = UDim2.new(settings.fov / 250, 0, 1, 0)
+    fovFill.BackgroundColor3 = Color3.fromRGB(100, 200, 100)
+    fovFill.Parent = fovSlider
+    Instance.new("UICorner", fovFill).CornerRadius = UDim.new(0, 9)
+    fovSlider.MouseButton1Click:Connect(function()
+        settings.fov = math.clamp(settings.fov + 10, 50, 250)
+        if settings.fov > 250 then settings.fov = 50 end
+        fovLabel.Text = "FOV: " .. settings.fov
+        fovFill.Size = UDim2.new(settings.fov / 250, 0, 1, 0)
+    end)
+    
+    -- Ползунок плавности
+    local smoothLabel = Instance.new("TextLabel")
+    smoothLabel.Size = UDim2.new(0, 80, 0, 25)
+    smoothLabel.Position = UDim2.new(0.5, -130, 0, y + 250)
+    smoothLabel.BackgroundTransparency = 1
+    smoothLabel.Text = "Smooth: " .. math.floor(settings.smoothness * 100)
+    smoothLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+    smoothLabel.TextSize = 11
+    smoothLabel.Font = Enum.Font.Gotham
+    smoothLabel.Parent = f
+    
+    local smoothSlider = Instance.new("TextButton")
+    smoothSlider.Size = UDim2.new(0, 120, 0, 18)
+    smoothSlider.Position = UDim2.new(0.5, -20, 0, y + 251)
+    smoothSlider.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+    smoothSlider.Text = ""
+    smoothSlider.Parent = f
+    Instance.new("UICorner", smoothSlider).CornerRadius = UDim.new(0, 9)
+    local smoothFill = Instance.new("Frame")
+    smoothFill.Size = UDim2.new(settings.smoothness, 0, 1, 0)
+    smoothFill.BackgroundColor3 = Color3.fromRGB(100, 200, 100)
+    smoothFill.Parent = smoothSlider
+    Instance.new("UICorner", smoothFill).CornerRadius = UDim.new(0, 9)
+    smoothSlider.MouseButton1Click:Connect(function()
+        settings.smoothness = math.clamp(settings.smoothness + 0.05, 0.1, 1)
+        if settings.smoothness > 1 then settings.smoothness = 0.1 end
+        smoothLabel.Text = "Smooth: " .. math.floor(settings.smoothness * 100)
+        smoothFill.Size = UDim2.new(settings.smoothness, 0, 1, 0)
+    end)
+    
+    local footer = Instance.new("TextLabel")
+    footer.Size = UDim2.new(1, 0, 0, 28)
+    footer.Position = UDim2.new(0, 0, 1, -30)
+    footer.BackgroundTransparency = 1
+    footer.Text = "Melony Scripts | by Melony"
+    footer.TextColor3 = Color3.fromRGB(100, 100, 120)
+    footer.TextSize = 11
+    footer.Font = Enum.Font.Gotham
+    footer.Parent = f
+end
+
+local function setupESP()
+    clearESP()
+    for _, player in ipairs(p:GetPlayers()) do
+        if player ~= plr and player.Character then createESP(player) end
+    end
 end
 
 -- Основной цикл
@@ -402,16 +516,14 @@ runService.RenderStepped:Connect(function()
     if settings.esp then
         for _, v in ipairs(p:GetPlayers()) do
             if v ~= plr and v.Character then
-                if not espObjects[v] then
-                    createESP(v)
-                else
-                    updateESP(v)
-                end
+                if not espObjects[v] then createESP(v) else updateESP(v) end
             end
         end
     elseif not settings.esp and next(espObjects) then
         clearESP()
     end
+    
+    updateDroppedGunESP()
     aimbot()
     triggerbot()
 end)
@@ -419,12 +531,7 @@ end)
 -- Горячая клавиша
 userInput.InputBegan:Connect(function(input)
     if input.KeyCode == Enum.KeyCode.RightShift then
-        if gui then
-            pcall(function() gui:Destroy() end)
-            gui = nil
-        else
-            createMenu()
-        end
+        if gui then pcall(function() gui:Destroy() end); gui = nil else createMenu() end
     end
 end)
 
@@ -432,7 +539,7 @@ end)
 createMenu()
 setupESP()
 
-print("✅ Melony Scripts Loaded | Role Lock Fix")
-print("🔪 Murderer stays RED even without knife!")
-print("👮 Sheriff stays BLUE even without gun!")
-print("🔄 Roles reset only on new round")
+print("✅ Melony Scripts | MM2 Ultimate")
+print("🔫 Dropped Gun ESP - показывает ТОЛЬКО выпавший пистолет шерифа")
+print("🎯 AimBot + TriggerBot с настройками")
+print("⌨️ Right Shift - открыть меню")
